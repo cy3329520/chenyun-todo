@@ -1,0 +1,44 @@
+name: 构建安装包
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            artifact-glob: "src-tauri/target/release/bundle/**/*.{app,dmg}"
+          - os: windows-latest
+            artifact-glob: "src-tauri/target/release/bundle/**/*.{exe,msi}"
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: 安装 Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: 安装前端依赖
+        working-directory: chenyun-todo
+        run: npm install
+
+      - name: 构建应用（Tauri 自动签名打包）
+        working-directory: chenyun-todo
+        run: npx tauri build
+
+      - name: 上传安装包
+        uses: actions/upload-artifact@v4
+        with:
+          name: 晨云待办-${{ matrix.os }}
+          path: chenyun-todo/${{ matrix.artifact-glob }}
+          if-no-files-found: error

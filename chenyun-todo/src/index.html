@@ -1,0 +1,819 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>晨云待办</title>
+<style>
+  :root {
+    --accent: #0a84ff;
+    --red: #ff453a;
+    --orange: #ff9f0a;
+    --green: #30d158;
+    --text: #1d1d1f;
+    --text-2: #6e6e73;
+    --text-3: #a1a1a6;
+    --bg-solid: rgba(246, 246, 248, 0.82);
+    --hover: rgba(0, 0, 0, 0.05);
+    --border: rgba(0, 0, 0, 0.1);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+    font-size: var(--fs, 12px);
+    color: var(--text);
+    background: transparent;
+    user-select: none;
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+  svg { display: block; }
+  #app {
+    position: relative;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    border-radius: 14px;
+    overflow: hidden;
+    border: 0.5px solid var(--border);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18), 0 1px 3px rgba(0, 0, 0, 0.08);
+    background: var(--bg-solid);
+    backdrop-filter: blur(22px) saturate(1.5);
+    -webkit-backdrop-filter: blur(22px) saturate(1.5);
+  }
+  /* 深色背景时切换整套文字变量 */
+  #app.bg-dark {
+    --text: #f5f5f7; --text-2: #98989d; --text-3: #6e6e73;
+    --hover: rgba(255, 255, 255, 0.08); --border: rgba(255, 255, 255, 0.12);
+    background: rgba(38, 38, 42, 0.9);
+  }
+  /* 自动模式跟随系统深色 */
+  @media (prefers-color-scheme: dark) {
+    #app.bg-auto:not(.bg-dark) {
+      --text: #f5f5f7; --text-2: #98989d; --text-3: #6e6e73;
+      --hover: rgba(255, 255, 255, 0.08); --border: rgba(255, 255, 255, 0.12);
+      background: rgba(40, 40, 44, 0.82);
+    }
+  }
+
+  /* ===== 头部 ===== */
+  header {
+    -webkit-app-region: drag;
+    display: flex; align-items: center; gap: 7px;
+    padding: 10px 10px 8px 12px;
+  }
+  header .accent-dot { color: var(--accent); display: flex; align-items: center; }
+  header .title { font-weight: 600; font-size: 13px; letter-spacing: 0.2px; }
+  header .count { color: var(--text-2); font-size: 11px; }
+  header .spacer { flex: 1; }
+  .hbtn {
+    -webkit-app-region: no-drag;
+    border: none; background: none; cursor: pointer;
+    color: var(--text-2); width: 24px; height: 22px;
+    border-radius: 6px; display: flex; align-items: center; justify-content: center;
+    transition: background 0.12s, color 0.12s;
+    padding: 0;
+  }
+  .hbtn:hover { background: var(--hover); color: var(--text); }
+  .hbtn.active { color: var(--accent); }
+
+  hr { border: none; border-top: 0.5px solid var(--border); margin: 0; }
+
+  /* ===== 主区域 ===== */
+  main { flex: 1; overflow-y: auto; min-height: 0; }
+  main::-webkit-scrollbar { width: 0; }
+  .empty { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: var(--text-2); }
+  .empty .big { color: var(--text-3); opacity: 0.6; margin-bottom: 2px; }
+  .empty .sub { font-size: 11px; color: var(--text-3); }
+
+  .row {
+    display: flex; align-items: flex-start; gap: 8px;
+    padding: 7px 8px; margin: 1px 8px; border-radius: 8px;
+    cursor: grab;
+    transition: background 0.1s;
+  }
+  .row:active { cursor: grabbing; }
+  .row:hover { background: var(--hover); }
+  .row.dragging { opacity: 0.4; }
+  .row .left { width: 16px; display: flex; justify-content: center; padding-top: 2px; flex-shrink: 0; }
+  .flag { display: flex; align-items: center; }
+  .flag-high { color: var(--red); }
+  .flag-mid { color: var(--orange); }
+  .flag-low { color: var(--text-3); }
+  .del { border: none; background: none; cursor: pointer; color: var(--text-2); padding: 0; display: flex; }
+  .del:hover { color: var(--red); }
+  .row .body { flex: 1; min-width: 0; }
+  .row .text { line-height: 1.4; word-break: break-word; white-space: pre-wrap; }
+  .row .text.done { color: var(--text-2); text-decoration: line-through; }
+  .row .text.high { font-weight: 600; }
+  .time-pill {
+    display: inline-flex; align-items: center; gap: 3px;
+    margin-top: 4px; padding: 2px 8px; border-radius: 10px;
+    font-size: calc(var(--fs, 12px) - 2px); color: var(--orange);
+    background: rgba(255, 159, 10, 0.14);
+  }
+  .time-pill .pill-clock { display: flex; }
+  .time-pill.done { color: var(--text-3); background: var(--hover); }
+  .row .check {
+    border: none; background: none; cursor: pointer;
+    color: var(--accent); padding: 0; flex-shrink: 0; padding-top: 1px;
+    display: flex; transition: transform 0.1s;
+  }
+  .row .check:active { transform: scale(0.85); }
+  .row .check.done { color: var(--text-3); }
+
+  .clear-bar { text-align: right; padding: 5px 14px; }
+  .clear-bar button { border: none; background: none; color: var(--text-2); font-size: 11px; cursor: pointer; }
+  .clear-bar button:hover { color: var(--red); }
+
+  /* ===== 底部添加栏 ===== */
+  .addbar {
+    display: flex; align-items: center; gap: 6px;
+    padding: 9px 20px 9px 12px;
+  }
+  .addbar input[type=text] {
+    flex: 1; min-width: 40px; border: none; background: none; outline: none;
+    font-size: 12px; color: var(--text);
+    font-family: inherit;
+  }
+  .addbar input::placeholder { color: var(--text-3); }
+  .prio-group { display: flex; gap: 3px; flex-shrink: 0; }
+  .prio {
+    border: none; cursor: pointer; border-radius: 10px;
+    padding: 3px 7px; font-size: 10px; color: var(--text-2);
+    background: var(--hover); font-family: inherit;
+    transition: all 0.12s;
+  }
+  .prio:hover { color: var(--text); }
+  .prio.on-low { background: rgba(128, 128, 128, 0.28); color: var(--text); font-weight: 600; }
+  .prio.on-mid { background: rgba(255, 159, 10, 0.22); color: var(--orange); font-weight: 600; }
+  .prio.on-high { background: rgba(255, 69, 58, 0.18); color: var(--red); font-weight: 600; }
+  .iconbtn {
+    border: none; background: none; cursor: pointer; color: var(--text-2);
+    padding: 3px; width: 26px; height: 26px; border-radius: 7px;
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    transition: background 0.12s, color 0.12s;
+  }
+  .iconbtn:hover { background: var(--hover); color: var(--text); }
+  .iconbtn:disabled { color: var(--text-3); opacity: 0.5; cursor: default; }
+  .iconbtn:disabled:hover { background: none; }
+  .iconbtn.active { color: var(--orange); }
+  #btnAdd { color: var(--accent); }
+  #btnAdd:disabled { color: var(--text-3); }
+  .head-ok { color: var(--accent); width: auto; height: auto; padding: 2px; }
+  .head-close { color: var(--text-2); width: auto; height: auto; padding: 2px; }
+  .head-close:hover { color: var(--text); }
+
+  /* ===== 缩放手柄 ===== */
+  #grip {
+    position: absolute; right: 1px; bottom: 1px;
+    width: 18px; height: 18px;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--text-3); cursor: nwse-resize;
+    -webkit-app-region: no-drag; z-index: 10;
+    border-bottom-right-radius: 14px;
+  }
+  #grip:hover { color: var(--text-2); }
+
+  /* ===== 提醒/设置面板 ===== */
+  .panel { padding: 10px 12px; }
+  .panel-head { display: flex; align-items: center; margin-bottom: 12px; }
+  .panel-head .t { font-size: 12px; font-weight: 600; flex: 1; }
+  .panel-head button { border: none; background: none; cursor: pointer; }
+  .field { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .field label { width: 30px; font-size: 11px; color: var(--text-2); flex-shrink: 0; }
+  .field input[type=text] {
+    border: 1px solid var(--border); border-radius: 7px;
+    padding: 4px 8px; font-size: 13px; background: rgba(255, 255, 255, 0.55); color: var(--text);
+    outline: none; font-variant-numeric: tabular-nums; font-family: inherit;
+    transition: border-color 0.12s;
+  }
+  .field input[type=text]:focus { border-color: var(--accent); }
+  .bg-dark .field input[type=text] { background: rgba(255, 255, 255, 0.08); color: var(--text); }
+  .field .hint { font-size: 10px; color: var(--text-3); }
+  .chips { display: flex; gap: 6px; }
+  .chip {
+    border: none; cursor: pointer; border-radius: 12px;
+    padding: 4px 13px; font-size: 11px;
+    background: var(--hover); color: var(--text); font-family: inherit;
+    transition: all 0.12s;
+  }
+  .chip:hover { color: var(--accent); }
+  .chip.on { background: rgba(10, 132, 255, 0.16); color: var(--accent); font-weight: 600; }
+  .err { color: var(--red); font-size: 10px; margin: -4px 0 8px 38px; }
+  .preview { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text-2); margin-bottom: 8px; }
+  .preview .bell { color: var(--orange); display: flex; }
+  .perm-warn { color: var(--red); font-size: 10px; margin-bottom: 6px; }
+  .note { font-size: 10px; color: var(--text-2); line-height: 1.5; }
+
+  .setting-row { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; font-size: 12px; }
+  .setting-row .name { width: 52px; flex-shrink: 0; color: var(--text); }
+  .setting-row input[type=range] { flex: 1; accent-color: var(--accent); }
+  .setting-row .val { width: 42px; text-align: right; font-size: 11px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+  .sec-title { font-size: 11px; color: var(--text-2); margin: 14px 0 9px; font-weight: 500; }
+  .bg-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 9px; }
+  .bg-item { border: none; background: none; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 4px; font-family: inherit; }
+  .bg-item .dot { width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid var(--border); transition: transform 0.12s; }
+  .bg-item:hover .dot { transform: scale(1.12); }
+  .bg-item.on .dot { border: 2.5px solid var(--accent); }
+  .bg-item .n { font-size: 8px; color: var(--text-2); }
+  .quit-btn { margin-top: 16px; border: none; background: none; color: var(--red); font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 6px; font-family: inherit; padding: 2px 0; }
+  .quit-btn:hover { opacity: 0.75; }
+  .switch { position: relative; width: 38px; height: 22px; flex-shrink: 0; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .slider-sw { position: absolute; inset: 0; border-radius: 11px; background: rgba(128, 128, 128, 0.4); transition: 0.18s; cursor: pointer; }
+  .slider-sw::before { content: ""; position: absolute; width: 18px; height: 18px; left: 2px; top: 2px; border-radius: 50%; background: #fff; transition: 0.18s; box-shadow: 0 1px 3px rgba(0,0,0,0.25); }
+  .switch input:checked + .slider-sw { background: var(--accent); }
+  .switch input:checked + .slider-sw::before { transform: translateX(16px); }
+</style>
+</head>
+<body>
+<div id="app">
+  <header data-tauri-drag-region="deep">
+    <span class="accent-dot" id="logoIcon"></span>
+    <span class="title">晨云待办</span>
+    <span class="count" id="count">0 项</span>
+    <span class="spacer"></span>
+    <button class="hbtn" id="btnSnapL" title="吸附到屏幕左上角"></button>
+    <button class="hbtn" id="btnSnapR" title="吸附到屏幕右上角"></button>
+    <button class="hbtn" id="btnSettings" title="设置"></button>
+    <button class="hbtn" id="btnHide" title="关闭面板（点托盘图标重新打开）"></button>
+  </header>
+  <hr>
+
+  <main id="listView">
+    <div class="empty" id="emptyTip">
+      <div class="big" id="emptyIcon"></div>
+      <div>暂无待办</div>
+      <div class="sub">在下方输入内容，回车即可添加</div>
+    </div>
+    <div id="rows"></div>
+  </main>
+
+  <!-- 提醒时间视图 -->
+  <main id="reminderView" style="display:none">
+    <div class="panel">
+      <div class="panel-head"><span class="t">设置提醒时间</span>
+        <button class="iconbtn head-ok" id="btnReminderOk" title="保存并返回"></button>
+      </div>
+      <div class="field">
+        <label>快捷</label>
+        <div class="chips">
+          <button class="chip" data-day="0">今天</button>
+          <button class="chip" data-day="1">明天</button>
+          <button class="chip" data-day="2">后天</button>
+          <button class="chip" id="chipCancel">取消提醒</button>
+        </div>
+      </div>
+      <div class="field">
+        <label>日期</label>
+        <input type="text" id="dateInput" placeholder="9/12" style="width:100px">
+        <span class="hint">如 9/12 或 2026/9/12</span>
+      </div>
+      <div class="err" id="dateErr" style="display:none">日期格式不对，示例：9/12、2026/9/12</div>
+      <div class="field">
+        <label>时间</label>
+        <input type="text" id="timeInput" placeholder="15:30" style="width:90px; text-align:center">
+        <span class="hint">如 15:30 或 15:30:25</span>
+      </div>
+      <div class="err" id="timeErr" style="display:none">时间格式不对，示例：15:30、09:05:30</div>
+      <div class="preview"><span class="bell" id="bellIcon"></span><span id="reminderPreview"></span></div>
+      <div class="note">到点后弹出系统通知并响铃（应用在托盘运行时有效）</div>
+    </div>
+  </main>
+
+  <!-- 设置视图 -->
+  <main id="settingsView" style="display:none">
+    <div class="panel" style="padding-bottom:20px">
+      <div class="panel-head"><span class="t">设置</span>
+        <button class="iconbtn head-close" id="btnSettingsBack" title="返回列表"></button>
+      </div>
+
+      <div class="setting-row">
+        <span style="flex:1">始终置顶</span>
+        <label class="switch"><input type="checkbox" id="setTop"><span class="slider-sw"></span></label>
+      </div>
+      <div class="setting-row">
+        <span class="name">透明度</span>
+        <input type="range" id="setOpacity" min="0.3" max="1" step="0.05">
+        <span class="val" id="opacityVal">100%</span>
+      </div>
+      <div class="setting-row">
+        <span class="name">字体大小</span>
+        <input type="range" id="setFont" min="11" max="18" step="1">
+        <span class="val" id="fontVal">12pt</span>
+      </div>
+
+      <div class="sec-title">背景样式</div>
+      <div class="bg-grid" id="bgGrid"></div>
+
+      <div class="sec-title">提醒方式</div>
+      <div class="setting-row">
+        <span style="flex:1">响铃（系统通知声音）</span>
+        <label class="switch"><input type="checkbox" id="setSound"><span class="slider-sw"></span></label>
+      </div>
+
+      <button class="quit-btn" id="btnQuit"><span id="quitIcon"></span>退出晨云待办</button>
+    </div>
+  </main>
+
+  <div id="clearBar" class="clear-bar" style="display:none">
+    <button id="btnClear">清除已完成（0）</button>
+  </div>
+  <hr>
+  <div class="addbar">
+    <button class="iconbtn" id="btnClock" title="设置提醒时间（可选）"></button>
+    <input type="text" id="newText" placeholder="添加待办，回车确认">
+    <div class="prio-group" id="prioGroup">
+      <button class="prio" data-p="0">低</button>
+      <button class="prio" data-p="1">中</button>
+      <button class="prio" data-p="2">高</button>
+    </div>
+    <button class="iconbtn" id="btnAdd" disabled></button>
+  </div>
+  <div id="grip" title="拖动调整窗口大小"></div>
+</div>
+
+<script>
+// 浏览器预览兜底：在普通浏览器（非 Tauri）中用 mock 渲染界面，便于调试样式
+if (!window.__TAURI__) {
+  class Pos { constructor(x, y) { this.x = x; this.y = y; } }
+  const noop = async () => {};
+  window.__TAURI__ = {
+    core: { invoke: async (cmd, args) => { console.log('[mock invoke]', cmd, args || ''); } },
+    window: {
+      PhysicalPosition: Pos,
+      getCurrentWindow: () => ({
+        setOpacity: noop, setAlwaysOnTop: noop, hide: noop, show: noop, setFocus: noop,
+        outerPosition: async () => ({ x: 100, y: 100 }), setPosition: noop,
+        currentMonitor: async () => ({ position: { x: 0, y: 0 }, size: { width: 1440, height: 900 }, scaleFactor: 2 }),
+        outerSize: async () => ({ width: 320, height: 460 }), startResizeDragging: noop,
+        listen: async () => () => {}
+      })
+    }
+  };
+}
+
+const { invoke } = window.__TAURI__.core;
+const win = window.__TAURI__.window.getCurrentWindow();
+const { PhysicalPosition } = window.__TAURI__.window;
+
+// ---------- 线性图标（SF Symbols 风格，stroke=currentColor）----------
+const ICON_PATHS = {
+  check:      '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+  xmark:      '<path d="M6 6l12 12M18 6L6 18"/>',
+  gear:       '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>',
+  snapL:      '<path d="M7 17 17 7"/><path d="M7 7h10"/><path d="M7 7v10"/>',
+  snapR:      '<path d="M7 7h10v10"/><path d="M7 17 17 7"/>',
+  clock:      '<circle cx="12" cy="12" r="9"/><path d="M12 7.5V12l3.2 2"/>',
+  flag:       '<path d="M5 21V4.5"/><path d="M5 5c2.5-1.5 5 1 8 .5s5-2 6-1v9c-2.5-1-5 .5-8 1s-5.5-1-6-.5"/>',
+  flagFill:   '<path d="M5.5 21V4" stroke-width="2.4"/><path d="M6 4.2c2.3-1.3 4.9 1 7.7.6 1.6-.2 2.9-.8 4.3-.2v8.7c-1.4-.6-2.7 0-4.3.3-2.8.5-5.4-1.9-7.7-.6z" fill="currentColor" stroke="none"/>',
+  plus:       '<path d="M12 5v14M5 12h14"/>',
+  circle:     '<circle cx="12" cy="12" r="8.5"/>',
+  checkCircle:'<circle cx="12" cy="12" r="9"/><path d="M8 12.2l2.8 2.8L16.5 9"/>',
+  xCircle:    '<circle cx="12" cy="12" r="9"/><path d="m9 9 6 6M15 9l-6 6"/>',
+  grip:       '<path d="m8 8 8 8"/><path d="M16 8v8H8"/>',
+  power:      '<path d="M12 3v8"/><path d="M18.4 6.6a8.5 8.5 0 1 1-12.8 0"/>',
+  bell:       '<path d="M6 9a6 6 0 0 1 12 0c0 5 2 6.5 2 6.5H4S6 14 6 9z"/><path d="M10.5 19a1.8 1.8 0 0 0 3 0"/>',
+  list:       '<path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/>'
+};
+function svg(name, size = 14, sw = 2) {
+  return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round">${ICON_PATHS[name] || ''}</svg>`;
+}
+
+// ---------- 数据 ----------
+const store = {
+  todos: [],
+  settings: { opacity: 1, fontSize: 12, alwaysOnTop: true, sound: true, bg: 'auto' },
+  load() {
+    try { this.todos = JSON.parse(localStorage.getItem('chenyun.todos') || '[]'); } catch { this.todos = []; }
+    try { Object.assign(this.settings, JSON.parse(localStorage.getItem('chenyun.settings') || '{}')); } catch {}
+    if (!Array.isArray(this.todos)) this.todos = [];
+  },
+  saveTodos() { localStorage.setItem('chenyun.todos', JSON.stringify(this.todos)); },
+  saveSettings() { localStorage.setItem('chenyun.settings', JSON.stringify(this.settings)); },
+  active() { return this.todos.filter(t => !t.done); },
+  display() { return [...this.active(), ...this.todos.filter(t => t.done)]; }
+};
+
+let mode = 'list';
+let selectedPriority = 0;
+let reminderDate = new Date(Date.now() + 3600000);
+let reminderArmed = false; // 是否已设置提醒（返回列表后仍保留，直到添加）
+let timers = {};
+
+// ---------- 工具 ----------
+const $ = id => document.getElementById(id);
+const pad = n => String(n).padStart(2, '0');
+const uid = () => (crypto.randomUUID ? crypto.randomUUID() : 'id' + Math.random().toString(36).slice(2));
+
+// 错误提示浮层（静默失败时给出可见反馈）
+function showToast(msg) {
+  let t = document.getElementById('errToast');
+  if (!t) {
+    t = document.createElement('div');
+    t.id = 'errToast';
+    t.style.cssText = 'position:absolute;left:50%;bottom:56px;transform:translateX(-50%);' +
+      'background:rgba(0,0,0,0.75);color:#fff;font-size:11px;padding:5px 10px;border-radius:8px;' +
+      'z-index:99;max-width:90%;pointer-events:none;transition:opacity .3s;opacity:0';
+    document.getElementById('app').appendChild(t);
+  }
+  t.textContent = msg;
+  t.style.opacity = '1';
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => { t.style.opacity = '0'; }, 2500);
+}
+
+function fmtRemind(d) {
+  const today = new Date(); today.setHours(0,0,0,0);
+  const that = new Date(d); that.setHours(0,0,0,0);
+  const diff = Math.round((that - today) / 86400000);
+  const hm = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  if (diff === 0) return `今天 ${hm}`;
+  if (diff === 1) return `明天 ${hm}`;
+  return `${d.getMonth()+1}月${d.getDate()}日 ${hm}`;
+}
+
+// ---------- 渲染列表 ----------
+function render() {
+  const rows = $('rows');
+  rows.innerHTML = '';
+  const list = store.display();
+  $('emptyTip').style.display = store.todos.length ? 'none' : 'flex';
+  $('count').textContent = `${store.active().length} 项`;
+  const doneCount = store.todos.length - store.active().length;
+  $('clearBar').style.display = (mode === 'list' && doneCount) ? 'block' : 'none';
+  $('btnClear').textContent = `清除已完成（${doneCount}）`;
+
+  list.forEach((t, idx) => {
+    const el = document.createElement('div');
+    el.className = 'row';
+    el.draggable = true;
+    el.dataset.id = t.id;
+    const flagIcon = t.priority === 0 ? svg('flag', 12, 2) : svg('flagFill', 12, 2);
+    const flag =
+      `<span class="flag flag-${t.priority === 2 ? 'high' : t.priority === 1 ? 'mid' : 'low'}">${flagIcon}</span>`;
+    el.innerHTML = `
+      <div class="left">${flag}</div>
+      <div class="body">
+        <div class="text ${t.done ? 'done' : ''} ${t.priority === 2 && !t.done ? 'high' : ''}"></div>
+        ${t.remind ? `<div class="time-pill ${t.done ? 'done' : ''}"><span class="pill-clock">${svg('clock', 10, 2.2)}</span><span></span></div>` : ''}
+      </div>
+      <button class="check ${t.done ? 'done' : ''}" title="${t.done ? '标记为未完成' : '完成'}">${t.done ? svg('checkCircle', 17, 2) : svg('circle', 17, 1.8)}</button>`;
+    el.querySelector('.text').textContent = t.text;
+    if (t.remind) el.querySelector('.time-pill span:last-child').textContent = fmtRemind(new Date(t.remind));
+
+    // 悬停删除
+    el.addEventListener('mouseenter', () => {
+      if (!t.done) el.querySelector('.left').innerHTML =
+        `<button class="del" title="删除">${svg('xCircle', 13, 2)}</button>`;
+    });
+    el.addEventListener('mouseleave', () => {
+      el.querySelector('.left').innerHTML = flag;
+    });
+    el.querySelector('.left').addEventListener('click', e => {
+      if (e.target.closest('.del')) {
+        store.todos = store.todos.filter(x => x.id !== t.id);
+        store.saveTodos();
+        clearTimer(t.id);
+        render();
+      }
+    });
+    // 完成切换
+    el.querySelector('.check').addEventListener('click', () => {
+      t.done = !t.done;
+      store.saveTodos();
+      if (t.done) clearTimer(t.id);
+      render();
+    });
+    // 拖拽排序
+    el.addEventListener('dragstart', e => {
+      el.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      dragId = t.id;
+    });
+    el.addEventListener('dragend', () => el.classList.remove('dragging'));
+    el.addEventListener('dragover', e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; });
+    el.addEventListener('drop', e => {
+      e.preventDefault();
+      const fromIdx = list.findIndex(x => x.id === dragId);
+      const targetId = t.id;
+      const ordered = list;
+      const [moved] = ordered.splice(fromIdx, 1);
+      const toIdx = ordered.findIndex(x => x.id === targetId);
+      ordered.splice(toIdx < 0 ? ordered.length : toIdx, 0, moved);
+      store.todos = [...ordered.filter(x => !x.done), ...ordered.filter(x => x.done)];
+      store.saveTodos();
+      render();
+    });
+    rows.appendChild(el);
+  });
+}
+let dragId = null;
+
+// ---------- 添加 ----------
+function addTodo() {
+  const text = $('newText').value.trim();
+  if (!text) return;
+  const todo = {
+    id: uid(), text, done: false,
+    priority: selectedPriority,
+    remind: reminderArmed ? reminderDate.toISOString() : null,
+    created: Date.now()
+  };
+  store.todos.unshift(todo);
+  store.saveTodos();
+  $('newText').value = '';
+  $('btnAdd').disabled = true;
+  selectedPriority = 0;
+  reminderArmed = false;
+  updatePrioUI();
+  mode = 'list';
+  switchView();
+  scheduleReminders();
+  render();
+}
+
+// ---------- 提醒定时器 ----------
+function clearTimer(id) { if (timers[id]) { clearTimeout(timers[id]); delete timers[id]; } }
+function scheduleReminders() {
+  Object.values(timers).forEach(clearTimeout);
+  timers = {};
+  const now = Date.now();
+  store.todos.forEach(t => {
+    if (!t.done && t.remind) {
+      const ts = new Date(t.remind).getTime();
+      if (ts > now) {
+        timers[t.id] = setTimeout(() => fireReminder(t), ts - now);
+      }
+    }
+  });
+}
+function fireReminder(t) {
+  invoke('send_reminder', { title: '晨云待办提醒', body: t.text, sound: store.settings.sound })
+    .catch(e => console.warn('通知失败', e));
+}
+
+// ---------- 视图切换 ----------
+function switchView() {
+  $('listView').style.display = mode === 'list' ? '' : 'none';
+  $('reminderView').style.display = mode === 'reminder' ? '' : 'none';
+  $('settingsView').style.display = mode === 'settings' ? '' : 'none';
+  $('clearBar').style.display = 'none';
+  $('btnClock').classList.toggle('active', reminderArmed);
+  $('btnSettings').classList.toggle('active', mode === 'settings');
+  refreshChromeIcons();
+  if (mode === 'list') render();
+}
+
+// ---------- 提醒时间面板 ----------
+function openReminder() {
+  if (reminderDate.getTime() < Date.now()) reminderDate = new Date(Date.now() + 3600000);
+  $('timeInput').value = `${pad(reminderDate.getHours())}:${pad(reminderDate.getMinutes())}:00`;
+  $('dateInput').value = `${reminderDate.getFullYear()}/${reminderDate.getMonth()+1}/${reminderDate.getDate()}`;
+  $('timeErr').style.display = $('dateErr').style.display = 'none';
+  mode = 'reminder';
+  switchView();
+  updatePreview();
+  setTimeout(() => $('timeInput').focus(), 50);
+}
+function updatePreview() {
+  $('reminderPreview').textContent =
+    `提醒时间：${reminderDate.getFullYear()}年${reminderDate.getMonth()+1}月${reminderDate.getDate()}日 ${pad(reminderDate.getHours())}:${pad(reminderDate.getMinutes())}`;
+}
+// 快捷日期
+document.querySelectorAll('.chip[data-day]').forEach(chip => {
+  chip.addEventListener('click', () => {
+    const d = new Date(); d.setHours(0,0,0,0);
+    d.setDate(d.getDate() + Number(chip.dataset.day));
+    d.setHours(reminderDate.getHours(), reminderDate.getMinutes(), reminderDate.getSeconds());
+    reminderDate = d;
+    $('dateInput').value = `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()}`;
+    $('dateErr').style.display = 'none';
+    updatePreview();
+  });
+});
+// 日期解析
+function applyDate() {
+  const parts = $('dateInput').value.split(/[\/\-.年月日\s]+/).filter(Boolean);
+  let y, m, dd;
+  if (parts.length === 2) { y = new Date().getFullYear(); m = +parts[0]; dd = +parts[1]; }
+  else if (parts.length === 3) { y = +parts[0]; if (y < 100) y += 2000; m = +parts[1]; dd = +parts[2]; }
+  else return false;
+  const d = new Date(y, m - 1, dd);
+  if (d.getFullYear() !== y || d.getMonth() !== m - 1 || d.getDate() !== dd) return false;
+  d.setHours(reminderDate.getHours(), reminderDate.getMinutes(), reminderDate.getSeconds());
+  reminderDate = d;
+  $('dateInput').value = `${y}/${m}/${dd}`;
+  return true;
+}
+// 时间解析
+function applyTime() {
+  const digits = $('timeInput').value.replace(/\D/g, '');
+  let h, mi, s = 0;
+  if (digits.length === 3) { h = +digits[0]; mi = +digits.slice(1); }
+  else if (digits.length === 4) { h = +digits.slice(0, 2); mi = +digits.slice(2); }
+  else if (digits.length === 6) { h = +digits.slice(0, 2); mi = +digits.slice(2, 4); s = +digits.slice(4); }
+  else return false;
+  if (h > 23 || mi > 59 || s > 59) return false;
+  reminderDate.setHours(h, mi, s);
+  return true;
+}
+$('dateInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') {
+    if (applyDate()) { $('dateErr').style.display = 'none'; updatePreview(); $('timeInput').focus(); }
+    else $('dateErr').style.display = '';
+  }
+});
+$('timeInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') {
+    const dOK = applyDate(), tOK = applyTime();
+    $('dateErr').style.display = dOK ? 'none' : '';
+    $('timeErr').style.display = tOK ? 'none' : '';
+    if (dOK && tOK) updatePreview();
+  }
+});
+$('timeInput').addEventListener('input', () => {
+  const n = $('timeInput').value.replace(/\D/g, '').length;
+  if (n >= 4) { if (applyTime()) { $('timeErr').style.display = 'none'; applyDate(); updatePreview(); } }
+});
+
+// ---------- 设置 ----------
+const BG_STYLES = [
+  { key: 'auto', name: '自动' },
+  { key: 'white', name: '白' },
+  { key: 'parchment', name: '羊皮纸' },
+  { key: 'yellow', name: '黄' },
+  { key: 'orange', name: '橙' },
+  { key: 'blue', name: '蓝' },
+  { key: 'green', name: '绿' },
+  { key: 'pink', name: '粉' },
+  { key: 'purple', name: '紫' },
+  { key: 'dark', name: '深色' }
+];
+const BG_CSS = {
+  white: '#fafafa', parchment: 'linear-gradient(180deg,#f6eac8,#eedcae)',
+  yellow: '#fff3ae', orange: '#ffe0b8', blue: '#cfe4ff', green: '#d8f2de',
+  pink: '#ffe0ea', purple: '#e9dfff', dark: '#26262a'
+};
+function applyBg() {
+  const app = $('app');
+  app.className = app.className.replace(/bg-\S+/g, '').trim();
+  const bg = store.settings.bg;
+  if (bg === 'auto') { app.classList.add('bg-auto'); app.style.background = ''; }
+  else {
+    app.classList.add('bg-' + bg);
+    if (bg === 'dark') app.classList.add('bg-dark');
+    app.style.background = BG_CSS[bg] || '';
+  }
+}
+function buildBgGrid() {
+  const grid = $('bgGrid');
+  grid.innerHTML = '';
+  BG_STYLES.forEach(b => {
+    const btn = document.createElement('button');
+    btn.className = 'bg-item' + (store.settings.bg === b.key ? ' on' : '');
+    let dotBg = BG_CSS[b.key] || 'linear-gradient(180deg,#fff,#333)';
+    btn.innerHTML = `<span class="dot" style="background:${dotBg}"></span><span class="n">${b.name}</span>`;
+    btn.addEventListener('click', () => {
+      store.settings.bg = b.key;
+      store.saveSettings();
+      buildBgGrid(); applyBg();
+    });
+    grid.appendChild(btn);
+  });
+}
+function applySettings() {
+  document.body.style.setProperty('--fs', store.settings.fontSize + 'px');
+  $('setOpacity').value = store.settings.opacity;
+  $('opacityVal').textContent = Math.round(store.settings.opacity * 100) + '%';
+  $('setFont').value = store.settings.fontSize;
+  $('fontVal').textContent = store.settings.fontSize + 'pt';
+  $('setTop').checked = store.settings.alwaysOnTop;
+  $('setSound').checked = store.settings.sound;
+  $('app').style.opacity = store.settings.opacity;
+  win.setAlwaysOnTop(store.settings.alwaysOnTop).catch(() => {});
+  applyBg();
+}
+$('setOpacity').addEventListener('input', e => {
+  store.settings.opacity = +e.target.value;
+  $('opacityVal').textContent = Math.round(store.settings.opacity * 100) + '%';
+  $('app').style.opacity = store.settings.opacity;
+  store.saveSettings();
+});
+$('setFont').addEventListener('input', e => {
+  store.settings.fontSize = +e.target.value;
+  $('fontVal').textContent = store.settings.fontSize + 'pt';
+  document.body.style.setProperty('--fs', store.settings.fontSize + 'px');
+  store.saveSettings();
+});
+$('setTop').addEventListener('change', e => {
+  store.settings.alwaysOnTop = e.target.checked;
+  win.setAlwaysOnTop(e.target.checked).catch(() => {});
+  store.saveSettings();
+});
+$('setSound').addEventListener('change', e => {
+  store.settings.sound = e.target.checked;
+  store.saveSettings();
+});
+$('btnQuit').addEventListener('click', () => invoke('quit_app'));
+
+// ---------- 窗口控制 ----------
+$('btnHide').addEventListener('click', () => win.hide());
+$('btnSettings').addEventListener('click', () => { mode = mode === 'settings' ? 'list' : 'settings'; switchView(); });
+$('btnSettingsBack').addEventListener('click', () => { mode = 'list'; switchView(); });
+$('btnClock').addEventListener('click', () => { mode === 'reminder' ? (mode = 'list', switchView()) : openReminder(); });
+$('btnReminderOk').addEventListener('click', () => { mode = 'list'; switchView(); });
+$('btnClear').addEventListener('click', () => {
+  store.todos = store.todos.filter(t => !t.done);
+  store.saveTodos(); render();
+});
+
+async function snap(corner) {
+  try {
+    await invoke('snap_window', { corner });
+    const p = await win.outerPosition();
+    localStorage.setItem('chenyun.pos', JSON.stringify({ x: p.x, y: p.y }));
+  } catch (e) {
+    console.error('snap failed', e);
+    showToast('吸附失败: ' + e);
+  }
+}
+$('btnSnapL').addEventListener('click', () => snap('L'));
+$('btnSnapR').addEventListener('click', () => snap('R'));
+
+// 缩放手柄
+$('grip').addEventListener('mousedown', e => {
+  e.preventDefault();
+  try {
+    win.startResizeDragging('SouthEast').catch(err => showToast('缩放失败: ' + err));
+  } catch (err) {
+    showToast('缩放失败: ' + err);
+  }
+});
+
+// 添加栏交互
+$('newText').addEventListener('input', e => {
+  $('btnAdd').disabled = !e.target.value.trim();
+});
+$('newText').addEventListener('keydown', e => { if (e.key === 'Enter') addTodo(); });
+$('btnAdd').addEventListener('click', addTodo);
+function updatePrioUI() {
+  document.querySelectorAll('.prio').forEach(b => {
+    b.classList.toggle('on-' + ['low','mid','high'][+b.dataset.p], +b.dataset.p === selectedPriority);
+  });
+}
+document.querySelectorAll('.prio').forEach(b => {
+  b.addEventListener('click', () => { selectedPriority = +b.dataset.p; updatePrioUI(); });
+});
+
+// ---------- 窗口位置记忆 ----------
+let posSaveTimer = null;
+win.listen('tauri://move', () => {
+  clearTimeout(posSaveTimer);
+  posSaveTimer = setTimeout(async () => {
+    const p = await win.outerPosition();
+    localStorage.setItem('chenyun.pos', JSON.stringify({ x: p.x, y: p.y }));
+  }, 500);
+});
+
+// ---------- 启动 ----------
+// 注入静态 SVG 图标
+function refreshChromeIcons() {
+  $('btnClock').innerHTML = svg('clock', 15, mode === 'reminder' ? 2.4 : 2);
+  $('btnAdd').innerHTML = svg('plus', 18, 2.2);
+}
+function injectStaticIcons() {
+  $('logoIcon').innerHTML = svg('checkCircle', 14, 2.4);
+  $('btnSnapL').innerHTML = svg('snapL', 12, 2.2);
+  $('btnSnapR').innerHTML = svg('snapR', 12, 2.2);
+  $('btnSettings').innerHTML = svg('gear', 13, 2);
+  $('btnHide').innerHTML = svg('xmark', 12, 2.4);
+  $('btnReminderOk').innerHTML = svg('checkCircle', 17, 2);
+  $('btnSettingsBack').innerHTML = svg('xCircle', 15, 2);
+  $('bellIcon').innerHTML = svg('bell', 11, 2);
+  $('quitIcon').innerHTML = svg('power', 12, 2);
+  $('emptyIcon').innerHTML = svg('list', 34, 1.5);
+  $('grip').innerHTML = svg('grip', 9, 2.6);
+  refreshChromeIcons();
+}
+
+(async function init() {
+  injectStaticIcons();
+  store.load();
+  updatePrioUI();
+  applySettings();
+  buildBgGrid();
+  switchView();
+  render();
+  scheduleReminders();
+  // 恢复上次位置
+  try {
+    const saved = JSON.parse(localStorage.getItem('chenyun.pos') || 'null');
+    if (saved) await win.setPosition(new PhysicalPosition(saved.x, saved.y));
+  } catch {}
+})();
+</script>
+</body>
+</html>

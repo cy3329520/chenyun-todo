@@ -1,0 +1,14 @@
+# 依赖
+node_modules/
+
+# Rust / Tauri 构建产物
+chenyun-todo/src-tauri/target/
+chenyun-todo/src-tauri/gen/
+
+# 打包产物
+chenyun-todo/build/
+MinimalTodo/build/
+MinimalTodo/.build/
+
+# 系统
+.DS_Store

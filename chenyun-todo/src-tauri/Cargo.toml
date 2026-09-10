@@ -1,0 +1,13 @@
+[package]
+name = "chenyun-todo"
+version = "1.0.0"
+description = "晨云待办"
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-notification = "2"
+serde = { version = "1", features = ["derive"] }
