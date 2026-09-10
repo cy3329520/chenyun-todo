@@ -44,9 +44,26 @@ jobs:
         working-directory: chenyun-todo
         run: npx tauri build ${{ matrix.bundle-args }}
 
-      - name: 上传安装包
+      - name: 上传构建产物（Artifacts）
         uses: actions/upload-artifact@v4
         with:
           name: 晨云待办-${{ matrix.os }}
           path: chenyun-todo/${{ matrix.artifact-path }}
           if-no-files-found: error
+
+      - name: 发布到 Releases（仅 tag 触发）
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: chenyun-todo/${{ matrix.artifact-path }}
+          name: 晨云待办 ${{ github.ref_name }}
+          body: |
+            ## 晨云待办 ${{ github.ref_name }}
+
+            - **Windows 10/11**：下载 `晨云待办_*_x64-setup.exe`，双击安装（中文界面）
+            - **macOS (Apple Silicon)**：下载 `.dmg`，拖入 Applications
+
+            > Windows SmartScreen 提示未知发布者时，选择「更多信息 → 仍要运行」；
+            > macOS 如被拦截，到「系统设置 → 隐私与安全性」点「仍要打开」。
+          draft: false
+          prerelease: false
