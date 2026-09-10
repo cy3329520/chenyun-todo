@@ -22,6 +22,12 @@
 - 🪶 **极致轻量** — 安装包约 3–5 MB，内存占用极低，秒开无卡顿
 - 🪶 **Tiny & Fast** — 3–5 MB installer, minimal memory footprint, instant launch
 
+<img width="722" height="962" alt="image" src="https://github.com/user-attachments/assets/0ce7c735-108e-4584-af3d-a174e52a09a2" />
+<img width="734" height="966" alt="image" src="https://github.com/user-attachments/assets/f02f11aa-e2e7-4397-b4de-d576e572b566" />
+<img width="732" height="964" alt="image" src="https://github.com/user-attachments/assets/8742b596-e4e9-4f0c-8bcd-3e29c23bfb13" />
+<img width="734" height="960" alt="image" src="https://github.com/user-attachments/assets/9e4a19f2-694c-4c48-bbdb-46251625ee3b" />
+
+
 ## 💻 支持平台 · Platforms
 
 | 平台 Platform | 安装包 Installer | 状态 Status |
