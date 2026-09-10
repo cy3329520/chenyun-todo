@@ -7,6 +7,7 @@ chenyun-todo/src-tauri/gen/
 
 # 打包产物
 chenyun-todo/build/
+chenyun-todo/dist/
 MinimalTodo/build/
 MinimalTodo/.build/
 
