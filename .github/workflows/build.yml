@@ -13,9 +13,12 @@ jobs:
       matrix:
         include:
           - os: macos-latest
-            artifact-glob: "src-tauri/target/release/bundle/**/*.{app,dmg}"
+            bundle-args: "--bundles dmg"
+            artifact-path: "src-tauri/target/release/bundle/dmg/*.dmg"
           - os: windows-latest
-            artifact-glob: "src-tauri/target/release/bundle/**/*.{exe,msi}"
+            # 仅打 NSIS（exe 安装包）；WiX/msi 对中文产品名兼容性差
+            bundle-args: "--bundles nsis"
+            artifact-path: "src-tauri/target/release/bundle/nsis/*-setup.exe"
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -28,17 +31,22 @@ jobs:
       - name: 安装 Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: 缓存 Rust 构建
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: chenyun-todo/src-tauri
+
       - name: 安装前端依赖
         working-directory: chenyun-todo
         run: npm install
 
-      - name: 构建应用（Tauri 自动签名打包）
+      - name: 构建应用
         working-directory: chenyun-todo
-        run: npx tauri build
+        run: npx tauri build ${{ matrix.bundle-args }}
 
       - name: 上传安装包
         uses: actions/upload-artifact@v4
         with:
           name: 晨云待办-${{ matrix.os }}
-          path: chenyun-todo/${{ matrix.artifact-glob }}
+          path: chenyun-todo/${{ matrix.artifact-path }}
           if-no-files-found: error
